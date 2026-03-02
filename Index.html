@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>300m Zielscheibe</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+<style>
+body {
+    margin:0;
+    font-family: Arial, sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
+}
+
+canvas {
+    background:white;
+    margin-top:10px;
+    touch-action:none;
+}
+
+.controls {
+    margin-top:10px;
+}
+
+input {
+    font-size:18px;
+    width:80px;
+}
+
+.turrets {
+    display:flex;
+    justify-content:space-around;
+    margin-top:15px;
+}
+
+.turret {
+    background:#222;
+    padding:15px;
+    border-radius:15px;
+    width:40%;
+}
+
+.click-display {
+    font-size:28px;
+    font-weight:bold;
+}
+.zero { color:#4CAF50; }
+</style>
+</head>
+<body>
+
+<h2>300m Zielscheibe</h2>
+
+<canvas id="target"></canvas>
+
+<div class="controls">
+    Punktzahl:
+    <input type="number" id="scoreInput" value="100" min="0" max="100">
+</div>
+
+<div class="turrets">
+    <div class="turret">
+        <div>HÖHE</div>
+        <div id="elevationClicks" class="click-display">0</div>
+        <div id="elevationDir"></div>
+    </div>
+    <div class="turret">
+        <div>SEITE</div>
+        <div id="windageClicks" class="click-display">0</div>
+        <div id="windageDir"></div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("target");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+    canvas.width = window.innerWidth * 0.95;
+    canvas.height = canvas.width;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+const center = () => canvas.width/2;
+const realRadiusCm = 50;
+const pixelRadius = () => canvas.width/2 * 0.9;
+const scale = () => pixelRadius() / realRadiusCm;
+
+let shot = null;
+let dragging = false;
+
+function drawTarget(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    for(let score=100; score>=0; score--){
+        let radiusCm = 0.5*(100-score)+0.5;
+        let radiusPx = radiusCm * scale();
+
+        ctx.beginPath();
+        ctx.arc(center(), center(), radiusPx, 0, Math.PI*2);
+        ctx.strokeStyle = score%10===0?"black":"#ccc";
+        ctx.lineWidth = score%10===0?2:1;
+        ctx.stroke();
+    }
+
+    if(shot){
+        ctx.beginPath();
+        ctx.arc(center()+shot.x, center()+shot.y, 6, 0, Math.PI*2);
+        ctx.fillStyle="red";
+        ctx.fill();
+    }
+}
+
+function updateTurrets(elev, wind){
+    document.getElementById("elevationClicks").innerText=elev;
+    document.getElementById("windageClicks").innerText=wind;
+
+    document.getElementById("elevationDir").innerHTML=
+        elev>0?"⬆ UP":elev<0?"⬇ DOWN":"<span class='zero'>ZERO</span>";
+
+    document.getElementById("windageDir").innerHTML=
+        wind>0?"➡ RIGHT":wind<0?"⬅ LEFT":"<span class='zero'>ZERO</span>";
+}
+
+function calculateCorrection(){
+    if(!shot){ updateTurrets(0,0); return; }
+
+    let cmX = shot.x/scale();
+    let cmY = shot.y/scale();
+
+    let clicksX = Math.round(-(cmX/30)*10);
+    let clicksY = Math.round(-(cmY/30)*10);
+
+    updateTurrets(clicksY, clicksX);
+}
+
+document.getElementById("scoreInput").addEventListener("input", function(){
+    let score=parseInt(this.value);
+    if(score<0||score>100) return;
+
+    let radiusCm=0.5*(100-score)+0.5;
+    let radiusPx=radiusCm*scale();
+
+    shot={radius:radiusPx,x:0,y:-radiusPx};
+
+    drawTarget();
+    calculateCorrection();
+});
+
+canvas.addEventListener("pointerdown", e=>{
+    if(!shot) return;
+    dragging=true;
+});
+
+canvas.addEventListener("pointermove", e=>{
+    if(!dragging||!shot) return;
+
+    const rect=canvas.getBoundingClientRect();
+    const x=e.clientX-rect.left-center();
+    const y=e.clientY-rect.top-center();
+
+    let angle=Math.atan2(y,x);
+
+    shot.x=Math.cos(angle)*shot.radius;
+    shot.y=Math.sin(angle)*shot.radius;
+
+    drawTarget();
+    calculateCorrection();
+});
+
+canvas.addEventListener("pointerup", ()=> dragging=false);
+
+drawTarget();
+
+// Service Worker registrieren
+if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+
+</body>
+</html>
